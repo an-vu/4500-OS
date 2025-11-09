@@ -263,24 +263,25 @@ void quantum_runout(void) {}
 
 void schedule_cpus(void)
 {
-    int i;
-
-    for (i = 0; i < num_cpu; i++)
-    {
-        if (cpu[i].proc_ndx != -1)
-            continue; // already running
-
-        if (ready_head == -1)
-            return; // nothing ready
+    for (int i = 0; i < num_cpu; i++) {
+        if (cpu[i].proc_ndx != -1) continue;   // CPU busy
+        if (ready_head == -1) return;          // nothing ready
 
         int p = ready_head;
         ready_head = proc[p].next_ready;
-        if (ready_head == -1)
-            ready_tail = -1;
+        if (ready_head == -1) ready_tail = -1;
 
         proc[p].state = RUNNING;
         cpu[i].proc_ndx = p;
         cpu[i].run_time = 0;
+
+        // compute how long until next CPU-cycle boundary or process finish
+        int rem_to_finish = proc[p].tot_cpu_req - proc[p].tot_cpu;
+        int in_cycle = proc[p].tot_cpu % proc[p].cpu_cycle;       // 0 at cycle start
+        int rem_to_cycle = (in_cycle == 0) ? proc[p].cpu_cycle    : (proc[p].cpu_cycle - in_cycle);
+
+        int delta = (rem_to_finish < rem_to_cycle) ? rem_to_finish : rem_to_cycle;
+        proc[p].t_event = t + delta;   // quantum ignored for now (Stage 2)
 
         printf("*** %d: process %d ready->running(cpu %d)\n", t, proc[p].pid, i);
     }
@@ -291,37 +292,52 @@ void set_next_event_time(void)
 {
     int next_t = -1;
 
-    // find next event time
-    for (int i = 0; i < num_proc; i++)
-    {
-        if (proc[i].state == COMPLETED)
-            continue;
-        if (proc[i].t_event == -1)
-            continue;
-        if (next_t == -1 || proc[i].t_event < next_t)
-            next_t = proc[i].t_event;
+    // find earliest pending event among all processes
+    for (int i = 0; i < num_proc; i++) {
+        if (proc[i].state == COMPLETED) continue;
+        if (proc[i].t_event == -1) continue;
+        if (next_t == -1 || proc[i].t_event < next_t) next_t = proc[i].t_event;
     }
 
-    if (next_t == -1)
-        return; // no more events
+    if (next_t == -1) return; // no more events
 
     last_t = t;
     t = next_t;
 
-    // simulate CPU progress between last_t and t
-    for (int i = 0; i < num_cpu; i++)
-    {
+    int dt = t - last_t;
+
+    // update CPU run/idle and tot_cpu for running procs
+    for (int i = 0; i < num_cpu; i++) {
         int p = cpu[i].proc_ndx;
-        if (p == -1)
-            continue;
-        if (proc[p].state != RUNNING)
-            continue;
-        proc[p].tot_cpu += (t - last_t);
+        if (p == -1) {
+            cpu[i].idle += dt;
+        } else if (proc[p].state == RUNNING) {
+            proc[p].tot_cpu += dt;
+            cpu[i].run_time += dt;
+        }
     }
 }
 
 /* =================== READY QUEUE =================== */
 void add_to_ready(int k)
 {
+    int prev = -1, curr = ready_head;
+
+    proc[k].state = READY;
+
+    // insert by descending priority, tie-breaker: smaller PID first
+    while (curr != -1) {
+        if (proc[k].prio > proc[curr].prio) break;
+        if (proc[k].prio == proc[curr].prio && proc[k].pid < proc[curr].pid) break;
+        prev = curr;
+        curr = proc[curr].next_ready;
+    }
+
+    if (prev == -1) ready_head = k;
+    else proc[prev].next_ready = k;
+
+    proc[k].next_ready = curr;
+    if (curr == -1) ready_tail = k;
+
     printf("*** %d: process %d moved to ready\n", t, proc[k].pid);
 }
