@@ -15,6 +15,18 @@
 #define MAXCPU 4
 #define MAXPROC 25
 
+// Toggle color output
+#define COLOR 1
+#if COLOR
+#define RED "\x1b[31m"
+#define BLUE "\x1b[34m"
+#define RESET "\x1b[0m"
+#else
+#define RED ""
+#define BLUE ""
+#define RESET ""
+#endif
+
 // Toggle this to 1 if you want to show trace logs (*** ...), 0 to hide them
 #define TRACE 0 // Change to 1 if need debug
 
@@ -83,7 +95,9 @@ void add_to_ready(int k);
 /* =================== MAIN =================== */
 int main(void)
 {
-    printf("Program 2:\n");
+    printf(BLUE "CSCI 4500 Program 2 by " RESET RED "An Vu" RESET "\n");
+    printf("\n");
+    printf(BLUE "Program 2:" RESET "\n");
     for (casenum = 1;; casenum++)
     {
         if (!getdata())
@@ -118,15 +132,15 @@ void display_heading(void)
     int i;
     if (casenum > 1)
         putchar('\n');
-    printf("Simulation # %d\n", casenum);
-    printf("--------------\n");
-    printf("Input:\n");
-    printf("     %d CPU%s, %d process%s, quantum size = %d\n",
+    printf(BLUE "Simulation # " RESET RED "%d" RESET "\n", casenum);
+    printf(BLUE "--------------" RESET "\n");
+    printf(BLUE "Input:" RESET "\n");
+    printf("     " RED "%d" RESET " " BLUE "CPU%s, " RESET RED "%d" RESET " " BLUE "process%s, quantum size = " RESET RED "%d" RESET "\n",
            num_cpu, (num_cpu > 1) ? "s" : "",
            num_proc, (num_proc > 1) ? "es" : "", quantum);
     for (i = 0; i < num_proc; i++)
     {
-        printf("     PID %d, prio = %d, submit = %d, totCPU = %d, CPU = %d, I/O = %d\n",
+        printf("     " BLUE "PID " RESET RED "%d" RESET ", " BLUE "prio = " RESET RED "%d" RESET ", " BLUE "submit = " RESET RED "%d" RESET ", " BLUE "totCPU = " RESET RED "%d" RESET ", " BLUE "CPU = " RESET RED "%d" RESET ", " BLUE "I/O = " RESET RED "%d" RESET "\n",
                proc[i].pid, proc[i].prio, proc[i].t_submit,
                proc[i].tot_cpu_req, proc[i].cpu_cycle, proc[i].io_cycle);
     }
@@ -196,15 +210,17 @@ void simulate(void)
     double avg_idle = (double)total_idle / num_cpu;
     double idle_percent = (avg_idle / t_last_finish) * 100.0;
 
-    printf("Schedule Output:\n");
+    printf(BLUE "Schedule Output:" RESET "\n");
     for (int i = 0; i < num_proc; i++)
     {
         int turnaround = proc[i].t_finish - proc[i].t_submit;
-        printf("     PID %d completed execution at %d, turnaround time = %d\n",
+        printf("     " BLUE "PID " RESET RED "%d" RESET " " BLUE "completed execution at " RESET RED "%d" RESET ", " BLUE "turnaround time = " RESET RED "%d" RESET "\n",
                proc[i].pid, proc[i].t_finish, turnaround);
     }
-    printf("     Average CPU idle time = %.0f (%.0f%%)\n", avg_idle, idle_percent);
-    printf("     Average process turnaround time = %.0f\n", avg_turnaround);
+    printf("     " BLUE "Average CPU idle time = " RESET RED "%.0f" RESET " (" RED "%.0f%%" RESET ")\n",
+           avg_idle, idle_percent);
+    printf("     " BLUE "Average process turnaround time = " RESET RED "%.0f" RESET "\n",
+           avg_turnaround);
 }
 
 /* =================== EVENT HANDLERS =================== */
@@ -224,7 +240,8 @@ void run_proc_fin(void)
             proc[p].t_finish = t;
             cpu[i].proc_ndx = -1;
             nfinished++;
-            if (TRACE) printf("*** %d: process %d running->done\n", t, proc[p].pid);
+            if (TRACE)
+                printf("*** %d: process %d running->done\n", t, proc[p].pid);
         }
     }
 }
@@ -239,7 +256,8 @@ void io_completed(void)
         {
             proc[i].t_event = -1;
             add_to_ready(i);
-            if (TRACE) printf("*** %d: process %d blocked->ready\n", t, proc[i].pid);
+            if (TRACE)
+                printf("*** %d: process %d blocked->ready\n", t, proc[i].pid);
         }
     }
 }
@@ -252,7 +270,8 @@ void do_submit(void)
             continue;
         if (proc[i].t_event == t)
         {
-            if (TRACE) printf("*** %d: process %d submitted\n", t, proc[i].pid);
+            if (TRACE)
+                printf("*** %d: process %d submitted\n", t, proc[i].pid);
             proc[i].t_event = -1;
             add_to_ready(i);
         }
@@ -276,7 +295,8 @@ void cpu_cycle_done(void)
             proc[p].state = BLOCKED;
             proc[p].t_event = t + proc[p].io_cycle;
             cpu[i].proc_ndx = -1;
-            if (TRACE) printf("*** %d: process %d running(cpu %d)->blocked\n", t, proc[p].pid, i);
+            if (TRACE)
+                printf("*** %d: process %d running(cpu %d)->blocked\n", t, proc[p].pid, i);
         }
     }
 }
@@ -307,7 +327,8 @@ void schedule_cpus(void)
         int delta = (rem_to_finish < rem_to_cycle) ? rem_to_finish : rem_to_cycle;
         proc[p].t_event = t + delta;
 
-        if (TRACE) printf("*** %d: process %d ready->running(cpu %d)\n", t, proc[p].pid, i);
+        if (TRACE)
+            printf("*** %d: process %d ready->running(cpu %d)\n", t, proc[p].pid, i);
     }
 }
 
@@ -371,5 +392,6 @@ void add_to_ready(int k)
     if (curr == -1)
         ready_tail = k;
 
-    if (TRACE) printf("*** %d: process %d moved to ready\n", t, proc[k].pid);
+    if (TRACE)
+        printf("*** %d: process %d moved to ready\n", t, proc[k].pid);
 }
