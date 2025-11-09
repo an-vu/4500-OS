@@ -15,6 +15,9 @@
 #define MAXCPU 4
 #define MAXPROC 25
 
+// Toggle this to 1 if you want to show trace logs (*** ...), 0 to hide them
+#define TRACE 0 // Change to 1 if need debug
+
 /* Process states */
 #define NOTYETSUBMITTED 1
 #define READY 2
@@ -62,10 +65,9 @@ int ready_head, ready_tail;
 /* =================== FUNCTION DECLARATIONS =================== */
 int getdata(void);
 void display_heading(void);
-void display_results(void);
 void simulate(void);
 
-/* Event functions (placeholders for later) */
+/* Event functions */
 void run_proc_fin(void);
 void io_completed(void);
 void do_submit(void);
@@ -88,7 +90,6 @@ int main(void)
             break;
         display_heading();
         simulate();
-        display_results();
     }
     return 0;
 }
@@ -129,12 +130,6 @@ void display_heading(void)
                proc[i].pid, proc[i].prio, proc[i].t_submit,
                proc[i].tot_cpu_req, proc[i].cpu_cycle, proc[i].io_cycle);
     }
-}
-
-void display_results(void)
-{
-    printf("Schedule Output:\n");
-    printf("     (see trace and summary above)\n");
 }
 
 /* =================== SIMULATION CORE =================== */
@@ -186,7 +181,6 @@ void simulate(void)
     int total_idle = 0;
     int t_last_finish = 0;
 
-    // compute per-process turnaround
     for (int i = 0; i < num_proc; i++)
     {
         int turnaround = proc[i].t_finish - proc[i].t_submit;
@@ -195,7 +189,6 @@ void simulate(void)
             t_last_finish = proc[i].t_finish;
     }
 
-    // compute total idle
     for (int i = 0; i < num_cpu; i++)
         total_idle += cpu[i].idle;
 
@@ -203,7 +196,6 @@ void simulate(void)
     double avg_idle = (double)total_idle / num_cpu;
     double idle_percent = (avg_idle / t_last_finish) * 100.0;
 
-    // --- formatted output ---
     printf("Schedule Output:\n");
     for (int i = 0; i < num_proc; i++)
     {
@@ -215,7 +207,7 @@ void simulate(void)
     printf("     Average process turnaround time = %.0f\n", avg_turnaround);
 }
 
-/* =================== EVENT HANDLERS (EMPTY PLACEHOLDERS) =================== */
+/* =================== EVENT HANDLERS =================== */
 void run_proc_fin(void)
 {
     for (int i = 0; i < num_cpu; i++)
@@ -232,7 +224,7 @@ void run_proc_fin(void)
             proc[p].t_finish = t;
             cpu[i].proc_ndx = -1;
             nfinished++;
-            printf("*** %d: process %d running->done\n", t, proc[p].pid);
+            if (TRACE) printf("*** %d: process %d running->done\n", t, proc[p].pid);
         }
     }
 }
@@ -247,21 +239,20 @@ void io_completed(void)
         {
             proc[i].t_event = -1;
             add_to_ready(i);
-            printf("*** %d: process %d blocked->ready\n", t, proc[i].pid);
+            if (TRACE) printf("*** %d: process %d blocked->ready\n", t, proc[i].pid);
         }
     }
 }
 
 void do_submit(void)
 {
-    int i;
-    for (i = 0; i < num_proc; i++)
+    for (int i = 0; i < num_proc; i++)
     {
         if (proc[i].state != NOTYETSUBMITTED)
             continue;
         if (proc[i].t_event == t)
         {
-            printf("*** %d: process %d submitted\n", t, proc[i].pid);
+            if (TRACE) printf("*** %d: process %d submitted\n", t, proc[i].pid);
             proc[i].t_event = -1;
             add_to_ready(i);
         }
@@ -278,16 +269,14 @@ void cpu_cycle_done(void)
         if (proc[p].state != RUNNING)
             continue;
 
-        // If this process finishes a CPU cycle
         if (proc[p].tot_cpu < proc[p].tot_cpu_req &&
             proc[p].tot_cpu % proc[p].cpu_cycle == 0 &&
             proc[p].tot_cpu != 0)
         {
-
             proc[p].state = BLOCKED;
             proc[p].t_event = t + proc[p].io_cycle;
             cpu[i].proc_ndx = -1;
-            printf("*** %d: process %d running(cpu %d)->blocked\n", t, proc[p].pid, i);
+            if (TRACE) printf("*** %d: process %d running(cpu %d)->blocked\n", t, proc[p].pid, i);
         }
     }
 }
@@ -299,9 +288,9 @@ void schedule_cpus(void)
     for (int i = 0; i < num_cpu; i++)
     {
         if (cpu[i].proc_ndx != -1)
-            continue; // CPU busy
+            continue;
         if (ready_head == -1)
-            return; // nothing ready
+            return;
 
         int p = ready_head;
         ready_head = proc[p].next_ready;
@@ -312,24 +301,21 @@ void schedule_cpus(void)
         cpu[i].proc_ndx = p;
         cpu[i].run_time = 0;
 
-        // compute how long until next CPU-cycle boundary or process finish
         int rem_to_finish = proc[p].tot_cpu_req - proc[p].tot_cpu;
-        int in_cycle = proc[p].tot_cpu % proc[p].cpu_cycle; // 0 at cycle start
+        int in_cycle = proc[p].tot_cpu % proc[p].cpu_cycle;
         int rem_to_cycle = (in_cycle == 0) ? proc[p].cpu_cycle : (proc[p].cpu_cycle - in_cycle);
-
         int delta = (rem_to_finish < rem_to_cycle) ? rem_to_finish : rem_to_cycle;
-        proc[p].t_event = t + delta; // quantum ignored for now (Stage 2)
+        proc[p].t_event = t + delta;
 
-        printf("*** %d: process %d ready->running(cpu %d)\n", t, proc[p].pid, i);
+        if (TRACE) printf("*** %d: process %d ready->running(cpu %d)\n", t, proc[p].pid, i);
     }
 }
 
 void do_preempt(void) {}
+
 void set_next_event_time(void)
 {
     int next_t = -1;
-
-    // find earliest pending event among all processes
     for (int i = 0; i < num_proc; i++)
     {
         if (proc[i].state == COMPLETED)
@@ -341,42 +327,31 @@ void set_next_event_time(void)
     }
 
     if (next_t == -1)
-        return; // no more events
+        return;
 
     last_t = t;
     t = next_t;
-
     int dt = t - last_t;
 
-    // update CPU usage and process runtime
     for (int i = 0; i < num_cpu; i++)
     {
         int p = cpu[i].proc_ndx;
         if (p == -1)
-        {
-            // CPU was idle during this interval
             cpu[i].idle += dt;
-        }
         else if (proc[p].state == RUNNING)
         {
-            // process used CPU time
             proc[p].tot_cpu += dt;
-
-            // accumulate total busy time for utilization stats
             cpu[i].run_time += dt;
         }
     }
 }
 
-
 /* =================== READY QUEUE =================== */
 void add_to_ready(int k)
 {
     int prev = -1, curr = ready_head;
-
     proc[k].state = READY;
 
-    // insert by descending priority, tie-breaker: smaller PID first
     while (curr != -1)
     {
         if (proc[k].prio > proc[curr].prio)
@@ -396,5 +371,5 @@ void add_to_ready(int k)
     if (curr == -1)
         ready_tail = k;
 
-    printf("*** %d: process %d moved to ready\n", t, proc[k].pid);
+    if (TRACE) printf("*** %d: process %d moved to ready\n", t, proc[k].pid);
 }

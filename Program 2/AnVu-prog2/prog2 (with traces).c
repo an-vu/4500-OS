@@ -62,7 +62,6 @@ int ready_head, ready_tail;
 /* =================== FUNCTION DECLARATIONS =================== */
 int getdata(void);
 void display_heading(void);
-void display_results(void);
 void simulate(void);
 
 /* Event functions (placeholders for later) */
@@ -88,7 +87,6 @@ int main(void)
             break;
         display_heading();
         simulate();
-        display_results();
     }
     return 0;
 }
@@ -129,12 +127,6 @@ void display_heading(void)
                proc[i].pid, proc[i].prio, proc[i].t_submit,
                proc[i].tot_cpu_req, proc[i].cpu_cycle, proc[i].io_cycle);
     }
-}
-
-void display_results(void)
-{
-    printf("Schedule Output:\n");
-    printf("     (see trace and summary above)\n");
 }
 
 /* =================== SIMULATION CORE =================== */
